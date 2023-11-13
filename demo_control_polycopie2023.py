@@ -38,7 +38,7 @@ def your_optimization_procedure(domain_omega, spacestep, omega, f, f_dir, f_neu,
                                        beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
 
         print('2. computing solution of adjoint problem, i.e., p')
-        p = processing.solve_helmholtz(domain_omega, spacestep, omega, f, f_dir, f_neu, f_rob,
+        p = processing.solve_helmholtz(domain_omega, spacestep, omega, -2*numpy.conjugate(u), numpy.zeros(f_dir.shape), numpy.zeros(f_dir.shape), numpy.zeros(f_dir.shape),
                                        beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
         print('3. computing objective function, i.e., energy')
         energy[k] = your_compute_objective_function(domain_omega, u, spacestep)
