@@ -26,6 +26,10 @@ def your_optimization_procedure(domain_omega, spacestep, omega, f, f_dir, f_neu,
         mu: float, it is the initial step of the gradient's descent;
         V_obj: float, it characterizes the volume constraint on the density chi.
     """
+    g_dir=numpy.zeros(f_dir.shape)
+    g_neu=numpy.zeros(f_neu.shape)
+    g_rob=numpy.zeros(f_rob.shape)
+
 
     k = 0
     (M, N) = numpy.shape(domain_omega)
@@ -36,10 +40,12 @@ def your_optimization_procedure(domain_omega, spacestep, omega, f, f_dir, f_neu,
         print('1. computing solution of Helmholtz problem, i.e., u')
         u = processing.solve_helmholtz(domain_omega, spacestep, omega, f, f_dir, f_neu, f_rob,
                                        beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
-
+        
+    
         print('2. computing solution of adjoint problem, i.e., p')
-        p = processing.solve_helmholtz(domain_omega, spacestep, omega, f, f_dir, f_neu, f_rob,
+        q=processing.solve_helmholtz(domain_omega, spacestep, omega, -2*numpy.conjugate(u), g_dir, g_neu, g_rob,
                                        beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
+        
         print('3. computing objective function, i.e., energy')
         energy[k] = your_compute_objective_function(domain_omega, u, spacestep)
         print('4. computing parametric gradient')
@@ -102,7 +108,7 @@ if __name__ == '__main__':
     # -- Fell free to modify the function call in this cell.
     # ----------------------------------------------------------------------
     # -- set parameters of the geometry
-    N = 50  # number of points along x-axis
+    N = 5  # number of points along x-axis
     M = 2 * N  # number of points along y-axis
     level = 0  # level of the fractal
     spacestep = 1.0 / N  # mesh size
@@ -126,6 +132,7 @@ if __name__ == '__main__':
     # -- set geometry of domain
     domain_omega, x, y, _, _ = preprocessing._set_geometry_of_domain(
         M, N, level)
+    print('domain omega ------------------------------------------', domain_omega)
 
     # ----------------------------------------------------------------------
     # -- Fell free to modify the function call in this cell.
