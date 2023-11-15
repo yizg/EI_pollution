@@ -47,7 +47,7 @@ def your_compute_objective_function(domain_omega, u, spacestep):
         for j in range(0, N-1):
             if domain_omega[i, j] == _env.NODE_INTERIOR or domain_omega[i+1, j] == _env.NODE_INTERIOR or domain_omega[i, j+1] == _env.NODE_INTERIOR or domain_omega[i+1, j+1] == _env.NODE_INTERIOR:
                 energy += (numpy.abs(u[i, j])**2 + numpy.abs(u[i+1, j])**2 +
-                           numpy.abs(u[i, j+1])**2 + numpy.abs(u[i+1, j+1])**2)*spacestep_x*spacestep_y/4
+                           numpy.abs(u[i, j+1])**2 + numpy.abs(u[i+1, j+1])**2)*spacestep_x*spacestep_x/4
 
     return energy
 
@@ -208,10 +208,11 @@ def your_optimization_procedure(domain_omega, spacestep, omega, f, f_dir, f_neu,
                                        beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
         # print('2. computing solution of adjoint problem, i.e., p')
 
-        q = processing.solve_helmholtz(domain_omega, spacestep, omega, -2*numpy.conjugate(u), g_dir, g_neu, g_rob,
+        q = processing.solve_helmholtz(domain_omega, spacestep, omega, -2*numpy.conjugate(u), g_dir, f_neu, f_rob,
                                        beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
         # print('3. computing objective function, i.e., energy')
-        energy[k] = your_compute_objective_function(domain_omega, u, spacestep)
+        energy[k, 0] = your_compute_objective_function(
+            domain_omega, u, spacestep)
         ene = energy[k, 0]
         # print('4. computing parametric gradient')
         grad = numpy.real(Alpha*u*q)
@@ -234,7 +235,7 @@ def your_optimization_procedure(domain_omega, spacestep, omega, f, f_dir, f_neu,
         while ene >= energy[k, 0] and mu > 10**(-5):
             # chi_n = chi.copy()
             # print('    a. computing gradient descent')
-            chi = descente_grad.compute_gradient_descent(
+            chi = compute_gradient_descent(
                 chi, grad, domain_omega, mu)
             # print('    b. computing projected gradient')
             chi = compute_projected(chi, domain_omega, V_obj)
@@ -255,7 +256,7 @@ def your_optimization_procedure(domain_omega, spacestep, omega, f, f_dir, f_neu,
                 mu = mu * 1.2
             else:
                 # The step is decreased if the energy increased
-                mu = mu / 3
+                mu = mu / 2
             # gradient boost
             # if mu < 10**(-5):
             #     mu = 500
@@ -271,7 +272,7 @@ def your_optimization_procedure(domain_omega, spacestep, omega, f, f_dir, f_neu,
 
     # print('end. computing solution of Helmholtz problem, i.e., u')
 
-    return chi, energy[:k], u, grad
+    return chi, energy, u, grad
 
 
 def simulated_annealing(domain_omega, spacestep, omega, f, f_dir, f_neu, f_rob,
@@ -320,9 +321,9 @@ if __name__ == '__main__':
     # -- Fell free to modify the function call in this cell.
     # ----------------------------------------------------------------------
     # -- set parameters of the geometry
-    N = 50  # number of points along x-axis
+    N = 100  # number of points along x-axis
     M = 2 * N  # number of points along y-axis
-    level = 3
+    level = 2
   # level of the fractal
 
     spacestep = 1.0 / N  # mesh size
@@ -331,7 +332,7 @@ if __name__ == '__main__':
     kx = -1.0
     ky = -1.0
     wavenumber = numpy.sqrt(kx**2 + ky**2)  # wavenumber
-    wavenumber = 1
+    wavenumber = 0.01
 
     # ----------------------------------------------------------------------
     # -- Do not modify this cell, these are the values that you will be assessed against.
@@ -382,7 +383,7 @@ if __name__ == '__main__':
     V_obj = numpy.sum(numpy.sum(chi)) / S  # constraint on the density
     print('V_obj=' + str(V_obj))
 
-    mu = 3  # initial gradient step
+    mu = 5  # initial gradient step
     mu1 = 10**(-5)  # parameter of the volume functional
 
     # ----------------------------------------------------------------------
@@ -391,6 +392,7 @@ if __name__ == '__main__':
     # -- compute finite difference solution
     u = processing.solve_helmholtz(domain_omega, spacestep, wavenumber, f, f_dir, f_neu, f_rob,
                                    beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
+    print(your_compute_objective_function(domain_omega, u, spacestep))
     chi0 = chi.copy()
     u0 = u.copy()
 
@@ -398,15 +400,23 @@ if __name__ == '__main__':
     # -- Fell free to modify the function call in this cell.
     # ----------------------------------------------------------------------
     # -- compute optimization
-    energy = numpy.zeros((100+1, 1), dtype=numpy.float64)
-    chi, energy, u, grad = your_optimization_procedure(domain_omega, spacestep, wavenumber, f, f_dir, f_neu, f_rob,
-                                                       beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob,
-                                                       Alpha, mu, chi, V_obj, nb_pixels)
+    # energy = numpy.zeros((100+1, 1), dtype=numpy.float64)
+    # chi, energy, u, grad = your_optimization_procedure(domain_omega, spacestep, wavenumber, f, f_dir, f_neu, f_rob,
+    #                                                    beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob,
+    #                                                    Alpha, mu, chi, V_obj, nb_pixels)
 
     # chi, energy = simulated_annealing(domain_omega, spacestep, wavenumber, f, f_dir, f_neu, f_rob,
     #                                   beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob,
     #                                   Alpha, mu, chi, V_obj, nb_pixels)
 
+    chi = numpy.random.uniform(0, 1, size=(M, N))
+    chi = compute_projected(chi, domain_omega, V_obj)
+    chi = final_projected(chi, nb_pixels)
+    alpha_rob = Alpha*chi
+    u = processing.solve_helmholtz(domain_omega, spacestep, wavenumber, f, f_dir, f_neu, f_rob,
+                                   beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
+    print(your_compute_objective_function(domain_omega, u, spacestep))
+    print(chi)
     # --- en of optimization
     # print(chi)
     chin = chi.copy()
@@ -417,6 +427,6 @@ if __name__ == '__main__':
     postprocessing._plot_controled_solution(un, chin)
     err = un - u0
     postprocessing._plot_error(err)
-    postprocessing._plot_energy_history(energy)
-    print(energy[0], energy[-1])
+    # postprocessing._plot_energy_history(energy)
+    # print(energy[0], energy[-1])
     print('End.')
