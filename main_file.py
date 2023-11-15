@@ -43,7 +43,7 @@ def your_compute_objective_function(domain_omega, u, spacestep):
         for j in range(0, N-1):
             if domain_omega[i, j] == _env.NODE_INTERIOR or domain_omega[i+1, j] == _env.NODE_INTERIOR or domain_omega[i, j+1] == _env.NODE_INTERIOR or domain_omega[i+1, j+1] == _env.NODE_INTERIOR:
                 energy += (numpy.abs(u[i, j])**2 + numpy.abs(u[i+1, j])**2 +
-                           numpy.abs(u[i, j+1])**2 + numpy.abs(u[i+1, j+1])**2)*spacestep_x*spacestep_y/4
+                           numpy.abs(u[i, j+1])**2 + numpy.abs(u[i+1, j+1])**2)*spacestep_x*spacestep_x/4
 
     return energy
 
@@ -429,13 +429,13 @@ def optimisation_multiple_freq(domain_omega, spacestep, wavenumbers, f, f_dir, f
 
             # print('4. computing parametric gradient')
 
-            grad = grad + numpy.real(Alpha*u*q)
+            grad = grad - numpy.real(Alpha*u*q)
         ene = energy[k]
         print(ene)
         while ene >= energy[k] and mu > 10 ** -5:
             # print('dans la deuxième boucle de ', k,'on est à ',c)
             # print('    a. computing gradient descent')
-            chi = compute_gradient_descent(
+            chi = descente_grad.compute_gradient_descent(
                 chi, grad, domain_omega, mu)
             # chi=compute_gradient_descent(chi, grad, domain_omega, mu)
 
@@ -508,7 +508,7 @@ if __name__ == '__main__':
     # -- Fell free to modify the function call in this cell.
     # ----------------------------------------------------------------------
     # -- set parameters of the geometry
-    N = 50  # number of points along x-axis
+    N = 100  # number of points along x-axis
     M = 2 * N  # number of points along y-axis
     level = 2  # level of the fractal
     spacestep = 1.0 / N  # mesh size
@@ -552,7 +552,7 @@ if __name__ == '__main__':
     chi = preprocessing.set2zero(chi, domain_omega)
     print(chi.shape)
     # -- define absorbing material
-    Alpha = 10.0 - 10.0 * 1j
+    Alpha = 50.0 - 50.0 * 1j
     # -- this is the function you have written during your project
     # import compute_alpha
     # Alpha = compute_alpha.compute_alpha(...)
@@ -585,7 +585,7 @@ if __name__ == '__main__':
     # ----------------------------------------------------------------------
     # -- compute optimization
     # energy = numpy.zeros((100+1, 1), dtype=numpy.float64)
-    wavenumbers = [1, 3.7, 5]
+    wavenumbers = [3.7]
     chi, energy, u, grad = optimisation_multiple_freq(domain_omega, spacestep, wavenumbers, f, f_dir, f_neu, f_rob,
                                                       beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob,
                                                       Alpha, mu, chi, V_obj, beta)
