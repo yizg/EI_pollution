@@ -32,9 +32,6 @@ def your_compute_objective_function(domain_omega, u, spacestep):
     # mask = domain_omega == _env.NODE_INTERIOR
     # energy = numpy.sum(numpy.sum(numpy.abs(u[mask])**2))*spacestep**2
 
-    (M, N) = numpy.shape(domain_omega)
-    spacestep_x = 1.0 / N
-    spacestep_y = 1.0 / M
 
     energy = 0.0
 
@@ -42,7 +39,7 @@ def your_compute_objective_function(domain_omega, u, spacestep):
         for j in range(0, N-1):
             if domain_omega[i, j] == _env.NODE_INTERIOR or domain_omega[i+1, j] == _env.NODE_INTERIOR or domain_omega[i, j+1] == _env.NODE_INTERIOR or domain_omega[i+1, j+1] == _env.NODE_INTERIOR:
                 energy += (numpy.abs(u[i, j])**2 + numpy.abs(u[i+1, j])**2 +
-                           numpy.abs(u[i, j+1])**2 + numpy.abs(u[i+1, j+1])**2)*spacestep_x*spacestep_y/4
+                           numpy.abs(u[i, j+1])**2 + numpy.abs(u[i+1, j+1])**2)*spacestep*spacestep/4
 
     return energy
 
@@ -81,7 +78,7 @@ def compute_projected(chi, domain, V_obj):
     fin = numpy.max(chi)
     ecart = fin - debut
     # We use dichotomy to find a constant such that chi^{n+1}=max(0,min(chi^{n}+l,1)) is an element of the admissible space
-    while ecart > 10 ** -4:
+    while ecart > 10**(-5):
         # calcul du milieu
         l = (debut + fin) / 2
         for i in range(M):
@@ -180,38 +177,44 @@ def your_optimization_procedure(domain_omega, spacestep, omega, f, f_dir, f_neu,
     g_rob = numpy.zeros(f_rob.shape)
     k = 0
     (M, N) = numpy.shape(domain_omega)
-    numb_iter = 100
+    numb_iter = 1000
     energy = numpy.zeros((numb_iter+1, 1), dtype=numpy.float64)
-    while k < numb_iter and mu > 10**(-5):
+    while k == 0 or (k>0 and numpy.abs(energy[k-1]- energy[k]) > 10**(-5)):
         print('---- iteration number = ', k)
         # print('1. computing solution of Helmholtz problem, i.e., u')
         u = processing.solve_helmholtz(domain_omega, spacestep, omega, f, f_dir, f_neu, f_rob,
                                        beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
         # print('2. computing solution of adjoint problem, i.e., p')
 
-        q = processing.solve_helmholtz(domain_omega, spacestep, omega, -2*numpy.conjugate(u), g_dir, g_neu, g_rob,
+        q = processing.solve_helmholtz(domain_omega, spacestep, omega, -2*numpy.conjugate(u), g_dir, f_neu, f_rob,
                                        beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
+        
         # print('3. computing objective function, i.e., energy')
         energy[k] = your_compute_objective_function(domain_omega, u, spacestep)
         ene = energy[k]
+
         # print('4. computing parametric gradient')
 
         grad = - numpy.real(Alpha*u*q)
+        number_steps = 0
+        mu += 10**(-3)
 
-        while ene >= energy[k] and mu > 10 ** -5:
+        while ene >= energy[k] and number_steps < 20:
+            ene_list = numpy.array([])
+            mu_list = numpy.array([])
+
             # print('    a. computing gradient descent')
-            chi = compute_gradient_descent(chi, grad, domain_omega, mu)
+            new_chi = compute_gradient_descent(chi, grad, domain_omega, mu)
             # print('    b. computing projected gradient')
-            chi = compute_projected(chi, domain_omega, V_obj)
+            new_chi = compute_projected(new_chi, domain_omega, V_obj)
             # print('    c. computing solution of Helmholtz problem, i.e., u')
-            alpha_rob = Alpha*chi
-            u = processing.solve_helmholtz(domain_omega, spacestep, omega, f, f_dir, f_neu, f_rob,
-                                        beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
-            q = processing.solve_helmholtz(domain_omega, spacestep, omega, -2*numpy.conjugate(u), g_dir, g_neu, g_rob,
-                                       beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
-            grad = - numpy.real(Alpha*u*q)
+            new_alpha_rob = Alpha*new_chi
+            new_u = processing.solve_helmholtz(domain_omega, spacestep, omega, f, f_dir, f_neu, f_rob,
+                                        beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, new_alpha_rob)
             # print('    d. computing objective function, i.e., energy (E)')
-            ene = your_compute_objective_function(domain_omega, u, spacestep)
+            ene = your_compute_objective_function(domain_omega, new_u, spacestep)
+            mu_list = numpy.append(mu_list, mu)
+            ene_list = numpy.append(ene_list, ene)
             bool_a = ene < energy[k]
             if bool_a:
                 # The step is increased if the energy decreased
@@ -219,8 +222,15 @@ def your_optimization_procedure(domain_omega, spacestep, omega, f, f_dir, f_neu,
             else:
                 # The step is decreased is the energy increased
                 mu = mu / 2
-            print("mu=" + str(mu), "ene=" + str(ene), "grad=" + str(numpy.linalg.norm(grad, 2)))
+            number_steps += 1
+            print("mu=" + str(mu), "ene=" + str(ene), "grad=" + str(numpy.linalg.norm(grad, numpy.infty)), "old ene=" + str(your_compute_objective_function(domain_omega, u, spacestep)))
+        mu = mu_list[numpy.where(numpy.min(ene_list) == ene_list)][0]
+        chi = compute_gradient_descent(chi, grad, domain_omega, mu)
+        chi = compute_projected(chi, domain_omega, V_obj)
+        alpha_rob = Alpha*chi
         k += 1
+
+    energy[k] = ene
 
     # print('end. computing solution of Helmholtz problem, i.e., u')
 
@@ -233,7 +243,7 @@ if __name__ == '__main__':
     # -- Fell free to modify the function call in this cell.
     # ----------------------------------------------------------------------
     # -- set parameters of the geometry
-    N = 50  # number of points along x-axis
+    N = 50 # number of points along x-axis
     M = 2 * N  # number of points along y-axis
     level = 2  # level of the fractal
     spacestep = 1.0 / N  # mesh size
@@ -242,7 +252,7 @@ if __name__ == '__main__':
     kx = -1.0
     ky = -1.0
     wavenumber = numpy.sqrt(kx**2 + ky**2)  # wavenumber
-    wavenumber = 10.0
+    wavenumber = 1.0
 
     # ----------------------------------------------------------------------
     # -- Do not modify this cell, these are the values that you will be assessed against.
@@ -326,3 +336,6 @@ if __name__ == '__main__':
     print(energy[0], energy[-1])
 
     print('End.')
+
+
+
