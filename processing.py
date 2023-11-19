@@ -295,25 +295,25 @@ def compute_robin_condition(domain, space_step, f_rob, alpha_rob, beta_rob, beta
                 if north:
                     mat[row, row - N] -= beta_pde[i - 1, j]
                     mat[row, row] += beta_pde[i, j] + (alpha_rob[i - 1, j] / beta_pde[i, j]) * h / (
-                            beta_rob[i - 1, j] - (alpha_rob[i - 1, j] / beta_pde[i, j] * h))
+                        beta_rob[i - 1, j] - (alpha_rob[i - 1, j] / beta_pde[i, j] * h))
                     rhs[row] += (h / (beta_rob[i - 1, j] - ((alpha_rob[i - 1, j] / beta_pde[i, j]) * h))) * f_rob[
                         i - 1, j]
                 if south:
                     mat[row, row + N] -= beta_pde[i + 1, j]
                     mat[row, row] += beta_pde[i, j] + (alpha_rob[i + 1, j] / beta_pde[i, j]) * h / (
-                            beta_rob[i + 1, j] - (alpha_rob[i + 1, j] / beta_pde[i, j] * h))
+                        beta_rob[i + 1, j] - (alpha_rob[i + 1, j] / beta_pde[i, j] * h))
                     rhs[row] += (h / (beta_rob[i + 1, j] - ((alpha_rob[i + 1, j] / beta_pde[i, j]) * h))) * f_rob[
                         i + 1, j]
                 if east:
                     mat[row, row + 1] -= beta_pde[i, j + 1]
                     mat[row, row] += beta_pde[i, j] + (alpha_rob[i, j + 1] / beta_pde[i, j]) * h / (
-                            beta_rob[i, j + 1] - (alpha_rob[i, j + 1] / beta_pde[i, j] * h))
+                        beta_rob[i, j + 1] - (alpha_rob[i, j + 1] / beta_pde[i, j] * h))
                     rhs[row] += (h / (beta_rob[i, j + 1] - ((alpha_rob[i, j + 1] / beta_pde[i, j]) * h))) * f_rob[
                         i, j + 1]
                 if west:
                     mat[row, row - 1] -= beta_pde[i, j - 1]
                     mat[row, row] += beta_pde[i, j] + (alpha_rob[i, j - 1] / beta_pde[i, j]) * h / (
-                            beta_rob[i, j - 1] - (alpha_rob[i, j - 1] / beta_pde[i, j] * h))
+                        beta_rob[i, j - 1] - (alpha_rob[i, j - 1] / beta_pde[i, j] * h))
                     rhs[row] += (h / (beta_rob[i, j - 1] - ((alpha_rob[i, j - 1] / beta_pde[i, j]) * h))) * f_rob[
                         i, j - 1]
 
@@ -342,7 +342,8 @@ def solve_helmholtz(domain, space_step, omega,
 
     (M, N) = numpy.shape(domain)
     # -- create stiffness matrix
-    mat_temp, rhs_temp = compute_stiffness_matrix(domain, space_step, f, beta_pde)
+    mat_temp, rhs_temp = compute_stiffness_matrix(
+        domain, space_step, f, beta_pde)
     mat = mat_temp
     rhs = rhs_temp
     # -- create mass matrix
@@ -397,13 +398,16 @@ def solve_helmholtz(domain, space_step, omega,
     # -->
 
     # -- set dirichlet boundary conditions
-    mat, rhs = compute_dirichlet_condition(domain, f_dir, alpha_dir, beta_pde, mat, rhs)
+    mat, rhs = compute_dirichlet_condition(
+        domain, f_dir, alpha_dir, beta_pde, mat, rhs)
     # -- set neumann boundary conditions boundary conditions
-    mat, rhs = compute_neumann_condition(domain, space_step, f_neu, beta_neu, beta_pde, mat, rhs)
+    mat, rhs = compute_neumann_condition(
+        domain, space_step, f_neu, beta_neu, beta_pde, mat, rhs)
     # -- set robin boundary conditions
-    mat, rhs = compute_robin_condition(domain, space_step, f_rob, alpha_rob, beta_rob, beta_pde, mat, rhs)
+    mat, rhs = compute_robin_condition(
+        domain, space_step, f_rob, alpha_rob, beta_rob, beta_pde, mat, rhs)
 
-    print(mat.shape[:])
+    # print(mat.shape[:])
 
     # -- solve linear system
     sol = scipy.sparse.linalg.spsolve(mat, rhs)
@@ -475,8 +479,8 @@ def compute_robin_condition_up(domain, u, space_step, beta_rob, alpha_rob):
     h = space_step
     (M, N) = numpy.shape(domain)
     value = numpy.zeros((M, N), dtype=numpy.complex128)
-    #for i in range(M - 1, -1, -1):  # la frontière est sur un bord donc on ne regarde que
-        # les points qui sont strictement à l'intérieur (i.e d'où le 2:M-2 et 2:N-2)
+    # for i in range(M - 1, -1, -1):  # la frontière est sur un bord donc on ne regarde que
+    # les points qui sont strictement à l'intérieur (i.e d'où le 2:M-2 et 2:N-2)
     #    for j in range(N - 1, -1, -1):
     for i in range(0, M):
         for j in range(0, N):
