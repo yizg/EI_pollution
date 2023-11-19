@@ -334,7 +334,7 @@ def opti_multi_freq_gradient(domain_omega, spacestep, omega, f, f_dir, f_neu, f_
     g_rob = numpy.zeros(f_rob.shape)
     k = 0
     (M, N) = numpy.shape(domain_omega)
-    numb_iter = 20
+    numb_iter = 10
     energy = numpy.zeros((numb_iter+1, 1), dtype=numpy.float64)
     chi_list = numpy.zeros((numb_iter+1, M, N), dtype=numpy.float64)
     chi_list[0, :, :] = chi
