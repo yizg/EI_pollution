@@ -29,7 +29,7 @@ def myimshow(tab, **kwargs):
         cmap = kwargs['cmap']
     else:
         cmap = 'jet'
-    #if 'clim' in kwargs and kwargs['clim']:
+    # if 'clim' in kwargs and kwargs['clim']:
     #    clim = kwargs['clim']
     if 'vmin' in kwargs and kwargs['vmin']:
         vmin = kwargs['vmin']
@@ -68,11 +68,14 @@ def myimshow(tab, **kwargs):
 
 
 def _plot_uncontroled_solution(u, chi):
-#def _plot_uncontroled_solution(x_plot, y_plot, x, y, u, chi):
+    # def _plot_uncontroled_solution(x_plot, y_plot, x, y, u, chi):
 
-    myimshow(numpy.real(u), title='$\operatorname{Re}(u_{0})$ in $\Omega$', colorbar='colorbar', cmap='jet', vmin=-1, vmax=1, filename='fig_u0_re.jpg')
-    myimshow(numpy.imag(u), title='$\operatorname{Im}(u_{0})$ in $\Omega$', colorbar='colorbar', cmap='jet', vmin=-1, vmax=1, filename='fig_u0_im.jpg')
-    myimshow(chi, title='$\chi_{0}$ in $\Omega$', colorbar='colorbar', cmap='jet', vmin=-1, vmax=1, filename='fig_chi0_re.jpg')
+    myimshow(numpy.real(u), title='$\operatorname{Re}(u_{0})$ in $\Omega$',
+             colorbar='colorbar', cmap='jet', vmin=-1, vmax=1, filename='fig_u0_re.jpg')
+    myimshow(numpy.imag(u), title='$\operatorname{Im}(u_{0})$ in $\Omega$',
+             colorbar='colorbar', cmap='jet', vmin=-1, vmax=1, filename='fig_u0_im.jpg')
+    myimshow(chi, title='$\chi_{0}$ in $\Omega$',
+             colorbar='colorbar', cmap='jet', vmin=-1, vmax=1, filename='fig_chi0_re.jpg')
     # k_begin = 0
     # k_end = len(x) - 1
     # for k in range(k_begin, k_end):
@@ -86,11 +89,14 @@ def _plot_uncontroled_solution(u, chi):
 
 
 def _plot_controled_solution(u, chi):
-#def _plot_controled_solution(x_plot, y_plot, x, y, u, chi):
+    # def _plot_controled_solution(x_plot, y_plot, x, y, u, chi):
 
-    myimshow(numpy.real(u), title='$\operatorname{Re}(u_{n})$ in $\Omega$', colorbar='colorbar', cmap='jet', vmin=-1, vmax=1, filename='fig_un_re.jpg')
-    myimshow(numpy.imag(u), title='$\operatorname{Im}(u_{n})$ in $\Omega$', colorbar='colorbar', cmap='jet', vmin=-1, vmax=1, filename='fig_un_im.jpg')
-    myimshow(chi, title='$\chi_{n}$ in $\Omega$', colorbar='colorbar', cmap='jet', vmin=-1, vmax=1, filename='fig_chin_re.jpg')
+    myimshow(numpy.real(u), title='$\operatorname{Re}(u_{n})$ in $\Omega$',
+             colorbar='colorbar', cmap='jet',  vmin=-1, vmax=1, filename='fig_un_re.jpg')
+    myimshow(numpy.imag(u), title='$\operatorname{Im}(u_{n})$ in $\Omega$',
+             colorbar='colorbar', cmap='jet', vmin=-1, vmax=1, filename='fig_un_im.jpg')
+    myimshow(chi, title='$\chi_{n}$ in $\Omega$', vmin=-1, vmax=1, colorbar='colorbar',
+             cmap='jet', filename='fig_chin_re.jpg')
     # k_begin = 0
     # k_end = len(x) - 1
     # for k in range(k_begin, k_end):
@@ -105,17 +111,21 @@ def _plot_controled_solution(u, chi):
 
 def _plot_error(err):
 
-    myimshow(numpy.real(err), title='$\operatorname{Re}(u_{n}-u_{0})$ in $\Omega$', colorbar='colorbar', cmap='jet', vmin = -1, vmax = 1, filename='fig_err_real.jpg')
-    myimshow(numpy.imag(err), title='$\operatorname{Im}(u_{n}-u_{0})$ in $\Omega$', colorbar='colorbar', cmap='jet', vmin = -1, vmax = 1, filename='fig_err.jpg')
+    myimshow(numpy.real(err), title='$\operatorname{Re}(u_{n}-u_{0})$ in $\Omega$',
+             colorbar='colorbar', cmap='jet', vmin=-1, vmax=1, filename='fig_err_real.jpg')
+    myimshow(numpy.imag(err), title='$\operatorname{Im}(u_{n}-u_{0})$ in $\Omega$',
+             colorbar='colorbar', cmap='jet', vmin=-1, vmax=1, filename='fig_err.jpg')
 
     return
 
+
 def _plot_energy_history(energy):
 
-    matplotlib.pyplot.plot(energy) #, cmap = 'jet')#, vmin = 1e-4, vmax = 1e-0)
+    # , cmap = 'jet')#, vmin = 1e-4, vmax = 1e-0)
+    matplotlib.pyplot.plot(energy)
     matplotlib.pyplot.title('Energy')
-    #matplotlib.pyplot.colorbar()
-    #matplotlib.pyplot.show()
+    # matplotlib.pyplot.colorbar()
+    # matplotlib.pyplot.show()
     filename = 'fig_energy_real.jpg'
     matplotlib.pyplot.savefig(filename)
     matplotlib.pyplot.close()

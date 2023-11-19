@@ -11,12 +11,9 @@ import numpy
 import os
 import sys
 import descente_grad
-import descente_grad2
 numpy.set_printoptions(threshold=sys.maxsize)
 
-
-# MRG packages
-# import solutions
+# fonctions utilitaires
 
 
 def your_compute_objective_function(domain_omega, u, spacestep):
@@ -33,9 +30,6 @@ def your_compute_objective_function(domain_omega, u, spacestep):
         equation.
     """
 
-    # mask = domain_omega == _env.NODE_INTERIOR
-    # energy = numpy.sum(numpy.sum(numpy.abs(u[mask])**2))*spacestep**2
-
     (M, N) = numpy.shape(domain_omega)
     spacestep_x = 1.0 / N
     spacestep_y = 1.0 / M
@@ -47,6 +41,7 @@ def your_compute_objective_function(domain_omega, u, spacestep):
         for j in range(0, N-1):
             if domain_omega[i, j] == _env.NODE_INTERIOR or domain_omega[i+1, j] == _env.NODE_INTERIOR or domain_omega[i, j+1] == _env.NODE_INTERIOR or domain_omega[i+1, j+1] == _env.NODE_INTERIOR:
                 energy += (numpy.abs(u[i, j])**2 + numpy.abs(u[i+1, j])**2 +
+                           # ou spacestep_x*spacestep_x/4
                            numpy.abs(u[i, j+1])**2 + numpy.abs(u[i+1, j+1])**2)*spacestep_x*spacestep_x/4
 
     return energy
@@ -104,13 +99,13 @@ def compute_projected(chi, domain, V_obj):
     return chi
 
 
-def final_projected(chi, beta):
+def final_projected(chi, nb_pixels):
     # find the beta th largest value of chi
     chi_copy = chi.copy()
     chi_copy = chi_copy.reshape(-1)
     chi_copy.sort()
     chi_copy = chi_copy[::-1]
-    threshold = chi_copy[beta-1]
+    threshold = chi_copy[nb_pixels-1]
     # set to zero all the values of chi that are smaller than the threshold
     chi[chi < threshold] = 0.
     # set to one all the values of chi that are greater than the threshold
@@ -182,6 +177,8 @@ def compute_gradient_descent(chi, grad, domain, mu):
 
     return chi
 
+# algo d'optimisation pour un seul k
+
 
 def your_optimization_procedure(domain_omega, spacestep, omega, f, f_dir, f_neu, f_rob,
                                 beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob,
@@ -199,86 +196,64 @@ def your_optimization_procedure(domain_omega, spacestep, omega, f, f_dir, f_neu,
     g_rob = numpy.zeros(f_rob.shape)
     k = 0
     (M, N) = numpy.shape(domain_omega)
-    numb_iter = 100
+    numb_iter = 10
     energy = numpy.zeros((numb_iter+1, 1), dtype=numpy.float64)
-    while k < numb_iter+1 and mu > 10**(-5):
+    chi_list = numpy.zeros((numb_iter+1, M, N), dtype=numpy.float64)
+    chi_list[0, :, :] = chi
+    while k < numb_iter and mu > 10**(-5):
         print('---- iteration number = ', k)
         # print('1. computing solution of Helmholtz problem, i.e., u')
+        chi = chi_list[k, :, :]
+        alpha_rob = Alpha*chi
         u = processing.solve_helmholtz(domain_omega, spacestep, omega, f, f_dir, f_neu, f_rob,
                                        beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
         # print('2. computing solution of adjoint problem, i.e., p')
-
-        q = processing.solve_helmholtz(domain_omega, spacestep, omega, -2*numpy.conjugate(u), g_dir, f_neu, f_rob,
+        q = processing.solve_helmholtz(domain_omega, spacestep, omega, -2*numpy.conjugate(u), g_dir, g_neu, g_rob,
                                        beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
         # print('3. computing objective function, i.e., energy')
-        energy[k, 0] = your_compute_objective_function(
-            domain_omega, u, spacestep)
+        energy[k] = your_compute_objective_function(domain_omega, u, spacestep)
         ene = energy[k, 0]
         # print('4. computing parametric gradient')
         grad = numpy.real(Alpha*u*q)
-        # print('    a. computing gradient descent')
-        # chi = descente_grad.compute_gradient_descent(
-        #     chi, grad, domain_omega, mu)
-        # # print('    b. computing projected gradient')
-        # chi = compute_projected(chi, domain_omega, V_obj)
-        # # print(chi)
-        # # print('    c. computing solution of Helmholtz problem, i.e., u')
-        # alpha_rob = Alpha*chi
-        # u = processing.solve_helmholtz(domain_omega, spacestep, omega, f, f_dir, f_neu, f_rob,
-        #                                beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
-        # # q = processing.solve_helmholtz(domain_omega, spacestep, omega, -2*numpy.conjugate(u), g_dir, g_neu, g_rob,
-        # #                                beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
-        # # grad = numpy.real(Alpha*u*q)
-        # # print('    d. computing objective function, i.e., energy (E)')
-        # ene = your_compute_objective_function(domain_omega, u, spacestep)
-        # print("après:"+str(ene))
         while ene >= energy[k, 0] and mu > 10**(-5):
-            # chi_n = chi.copy()
             # print('    a. computing gradient descent')
-            chi = compute_gradient_descent(
-                chi, grad, domain_omega, mu)
+            old_chi = chi_list[k, :, :].copy()
+            new_chi = compute_gradient_descent(
+                old_chi, grad, domain_omega, mu)
             # print('    b. computing projected gradient')
-            chi = compute_projected(chi, domain_omega, V_obj)
-            # print(chi)
+            new_chi = compute_projected(new_chi, domain_omega, V_obj)
+            new_chi = processing.set2zero(new_chi, domain_omega)
             # print('    c. computing solution of Helmholtz problem, i.e., u')
-            alpha_rob = Alpha*chi
+            alpha_rob = Alpha*new_chi
             u = processing.solve_helmholtz(domain_omega, spacestep, omega, f, f_dir, f_neu, f_rob,
                                            beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
-            # q = processing.solve_helmholtz(domain_omega, spacestep, omega, -2*numpy.conjugate(u), g_dir, g_neu, g_rob,
-            #                                beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
-            # grad = numpy.real(Alpha*u*q)
             # print('    d. computing objective function, i.e., energy (E)')
             ene = your_compute_objective_function(domain_omega, u, spacestep)
-            print(ene)
-            bool_a = ene < energy[k]
-            if bool_a:
+            if ene < energy[k]:
                 # The step is increased if the energy decreased
-                mu = mu * 1.2
+                mu = mu * 1.1
+                # print('sortie')
+                chi_list[k+1, :, :] = new_chi.copy()
             else:
                 # The step is decreased if the energy increased
                 mu = mu / 2
-            # gradient boost
-            # if mu < 10**(-5):
-            #     mu = 500
             print("mu=" + str(mu), "ene=" + str(ene),
                   "grad=" + str(numpy.linalg.norm(grad, 2)))
         k += 1
+    chi = chi_list[k-1, :, :]
     chi = final_projected(chi, beta)
     alpha_rob = Alpha*chi
     u = processing.solve_helmholtz(domain_omega, spacestep, omega, f, f_dir, f_neu, f_rob,
                                    beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
     energy = energy[:k]
     energy[-1] = your_compute_objective_function(domain_omega, u, spacestep)
-
-    # print('end. computing solution of Helmholtz problem, i.e., u')
-
-    return chi, energy, u, grad
+    return chi, energy, u  # , grad
 
 
 def simulated_annealing(domain_omega, spacestep, omega, f, f_dir, f_neu, f_rob,
                         beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob,
                         Alpha, mu, chi, V_obj, beta):
-    numb_iter = 100
+    numb_iter = 20
     energy = numpy.zeros((numb_iter+1, 1), dtype=numpy.float64)
     (M, N) = numpy.shape(domain_omega)
     # initial point
@@ -312,7 +287,294 @@ def simulated_annealing(domain_omega, spacestep, omega, f, f_dir, f_neu, f_rob,
     u = processing.solve_helmholtz(domain_omega, spacestep, omega, f, f_dir, f_neu, f_rob,
                                    beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
     energy[-1] = your_compute_objective_function(domain_omega, u, spacestep)
-    return chi, energy
+    return chi, energy, u
+
+
+def random_generated(domain_omega, spacestep, omega, f, f_dir, f_neu, f_rob,
+                     beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob,
+                     Alpha, mu, chi, V_obj, beta):
+    energy = numpy.zeros((2, 1), dtype=numpy.float64)
+    u = processing.solve_helmholtz(domain_omega, spacestep, wavenumber, f, f_dir, f_neu, f_rob,
+                                   beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
+    energy[0, 0] = your_compute_objective_function(domain_omega, u, spacestep)
+    chi = numpy.random.uniform(0, 1, size=(M, N))
+    chi = compute_projected(chi, domain_omega, V_obj)
+    chi = final_projected(chi, beta)
+    alpha_rob = Alpha*chi
+    u = processing.solve_helmholtz(domain_omega, spacestep, wavenumber, f, f_dir, f_neu, f_rob,
+                                   beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
+    energy[1, 0] = your_compute_objective_function(domain_omega, u, spacestep)
+    print("energy=" + str(energy))
+    return chi, energy, u
+
+# algo d'optimisation pour plusieurs k
+
+
+def opti_multi_freq_gradient(domain_omega, spacestep, omega, f, f_dir, f_neu, f_rob,
+                             beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob,
+                             Alpha, mu, chi, V_obj, beta):
+
+    wavenumbers = numpy.array([k for k in range(1, 100)])
+    # on calcule l'energie pour chaque k pour trouver les coefficients de ponderation
+    energy_coef = numpy.zeros(wavenumbers.shape)
+    alpha_rob = Alpha*chi
+    for j in range(len(wavenumbers)):
+        u = processing.solve_helmholtz(domain_omega, spacestep, wavenumbers[j], f, f_dir, f_neu, f_rob,
+                                       beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
+        energy_coef[j] = energy_coef[j] + \
+            your_compute_objective_function(domain_omega, u, spacestep)
+    K = 10
+    # on trouver les K plus grandes valeurs de l'energie et les indices correspondants
+    indices = numpy.argsort(energy_coef, axis=0)[::-1][:K]
+    wavenumbers = wavenumbers[indices]
+    energy_coef = energy_coef[indices]
+
+    g_dir = numpy.zeros(f_dir.shape)
+    g_neu = numpy.zeros(f_neu.shape)
+    g_rob = numpy.zeros(f_rob.shape)
+    k = 0
+    (M, N) = numpy.shape(domain_omega)
+    numb_iter = 20
+    energy = numpy.zeros((numb_iter+1, 1), dtype=numpy.float64)
+    chi_list = numpy.zeros((numb_iter+1, M, N), dtype=numpy.float64)
+    chi_list[0, :, :] = chi
+    while k < numb_iter and mu > 10**(-5):
+        print('---- iteration number = ', k)
+        grad = 0
+        chi = chi_list[k, :, :]
+        alpha_rob = Alpha*chi
+        for j in range(len(wavenumbers)):
+            # print('1. computing solution of Helmholtz problem, i.e., u')
+            u = processing.solve_helmholtz(domain_omega, spacestep, wavenumbers[j], f, f_dir, f_neu, f_rob,
+                                           beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
+            # print('2. computing solution of adjoint problem, i.e., p')
+            q = processing.solve_helmholtz(domain_omega, spacestep, wavenumbers[j], -2*numpy.conjugate(u), g_dir, g_neu, g_rob,
+                                           beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
+            # print('3. computing objective function, i.e., energy')
+            energy[k] = energy[k] + your_compute_objective_function(
+                domain_omega, u, spacestep)*energy_coef[j]
+            # print('4. computing parametric gradient')
+            grad = grad + numpy.real(Alpha*u*q)*energy_coef[j]
+        ene = energy[k, 0]
+        while ene >= energy[k, 0] and mu > 10**(-5):
+            # print('    a. computing gradient descent')
+            old_chi = chi_list[k, :, :].copy()
+            new_chi = compute_gradient_descent(
+                old_chi, grad, domain_omega, mu)
+            # print('    b. computing projected gradient')
+            new_chi = compute_projected(new_chi, domain_omega, V_obj)
+            new_chi = processing.set2zero(new_chi, domain_omega)
+            # print('    c. computing solution of Helmholtz problem, i.e., u')
+            alpha_rob = Alpha*new_chi
+            ene = 0
+            for j in range(len(wavenumbers)):
+                u = processing.solve_helmholtz(domain_omega, spacestep, wavenumbers[j], f, f_dir, f_neu, f_rob,
+                                               beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
+            # print('    d. computing objective function, i.e., energy (E)')
+                ene += your_compute_objective_function(
+                    domain_omega, u, spacestep)*energy_coef[j]
+            if ene < energy[k]:
+                # The step is increased if the energy decreased
+                mu = mu * 1.1
+                # print('sortie')
+                chi_list[k+1, :, :] = new_chi.copy()
+            else:
+                # The step is decreased if the energy increased
+                mu = mu / 2
+            print("mu=" + str(mu), "ene=" + str(ene),
+                  "grad=" + str(numpy.linalg.norm(grad, 2)))
+        k += 1
+    chi = chi_list[k-1, :, :]
+    chi = final_projected(chi, beta)
+    # alpha_rob = Alpha*chi
+    # u = processing.solve_helmholtz(domain_omega, spacestep, omega, f, f_dir, f_neu, f_rob,
+    #                                beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
+    energy = energy[:k]
+    # energy[-1] = your_compute_objective_function(domain_omega, u, spacestep)
+    return chi, energy, u
+
+
+def opti_multi_freq_random(domain_omega, spacestep, omega, f, f_dir, f_neu, f_rob,
+                           beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob,
+                           Alpha, mu, chi, V_obj, beta):
+
+    wavenumbers = numpy.array([k for k in range(1, 100)])
+    energies_before = numpy.zeros((len(wavenumbers), 1))
+    energies = numpy.zeros((len(wavenumbers), 1))
+    for k in range(len(wavenumbers)):
+        u = processing.solve_helmholtz(domain_omega, spacestep, wavenumbers[k], f, f_dir, f_neu, f_rob,
+                                       beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
+        ene = your_compute_objective_function(domain_omega, u, spacestep)
+        energies_before[k] = ene
+    chi, _, _ = random_generated(domain_omega, spacestep, wavenumbers[0], f, f_dir, f_neu, f_rob,
+                                 beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob,
+                                 Alpha, mu, chi, V_obj, beta)
+    alpha_rob = Alpha*chi
+    for k in range(len(wavenumbers)):
+        u = processing.solve_helmholtz(domain_omega, spacestep, wavenumbers[k], f, f_dir, f_neu, f_rob,
+                                       beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
+        ene = your_compute_objective_function(domain_omega, u, spacestep)
+        energies[k] = ene
+    # postprocessing._plot_controled_solution(u, chi)
+    matplotlib.pyplot.plot(wavenumbers*(340/(2*numpy.pi)),
+                           energies_before, label='Avant optimisation')
+    matplotlib.pyplot.plot(wavenumbers*(340/(2*numpy.pi)),
+                           energies, label='Après optimisation')
+    matplotlib.pyplot.xlabel('Fréquence')
+    matplotlib.pyplot.ylabel('Energie')
+    # limit to 3 digits in title
+    print('Energie maximale avant optimisation = ' +
+          str(numpy.round(numpy.max(energies_before), 4))+', Moy = '+str(numpy.round(numpy.average(energies_before), 3)))
+    matplotlib.pyplot.title('Energie maximale après optimisation = ' +
+                            str(numpy.round(numpy.max(energies), 4))+', Moy = '+str(numpy.round(numpy.average(energies), 3)))
+    matplotlib.pyplot.legend()
+    matplotlib.pyplot.show()
+    return chi
+
+
+# plot l'energie en fonction de la frequence pour un chi donné en entrée
+
+
+def energy_freq(domain_omega, spacestep, omega, f, f_dir, f_neu, f_rob,
+                beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob,
+                Alpha, mu, chi, V_obj, beta):
+    wavenumbers = numpy.array([k for k in range(1, 100)])
+    energies = numpy.zeros((len(wavenumbers), 1))
+    alpha_rob = Alpha*chi
+    for k in range(len(wavenumbers)):
+        u = processing.solve_helmholtz(domain_omega, spacestep, wavenumbers[k], f, f_dir, f_neu, f_rob,
+                                       beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
+        energies[k] = your_compute_objective_function(
+            domain_omega, u, spacestep)
+
+    matplotlib.pyplot.plot(wavenumbers*(340/(2*numpy.pi)),
+                           energies)
+    matplotlib.pyplot.xlabel('Fréquence')
+    matplotlib.pyplot.ylabel('Energie')
+    # limit to 3 digits in title
+    matplotlib.pyplot.title(' Max = ' +
+                            str(numpy.round(numpy.max(energies), 3))+', Moy = '+str(numpy.round(numpy.average(energies), 3)))
+    matplotlib.pyplot.legend()
+    matplotlib.pyplot.show()
+    return
+
+# plot l'energie en fonction de la frequence pour un chi donné en entrée et pour un chi totalement absorbant
+
+
+def energy_freq_vs_fullabs(domain_omega, spacestep, omega, f, f_dir, f_neu, f_rob,
+                           beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob,
+                           Alpha, mu, chi, V_obj, beta):
+    wavenumbers = numpy.array([k for k in range(1, 100)])
+    energies = numpy.zeros((len(wavenumbers), 1))
+    alpha_rob = Alpha*chi
+    for k in range(len(wavenumbers)):
+        u = processing.solve_helmholtz(domain_omega, spacestep, wavenumbers[k], f, f_dir, f_neu, f_rob,
+                                       beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
+        energies[k] = your_compute_objective_function(
+            domain_omega, u, spacestep)
+    # full absorbing chi
+    energies_fullabs = numpy.zeros((len(wavenumbers), 1))
+    chi = preprocessing._set_chi(M, N, x, y)
+    chi = numpy.ones(chi.shape)
+    chi = preprocessing.set2zero(chi, domain_omega)
+    alpha_rob = Alpha*chi
+    for k in range(len(wavenumbers)):
+        u = processing.solve_helmholtz(domain_omega, spacestep, wavenumbers[k], f, f_dir, f_neu, f_rob,
+                                       beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
+        energies_fullabs[k] = your_compute_objective_function(
+            domain_omega, u, spacestep)
+
+    matplotlib.pyplot.plot(wavenumbers*(340/(2*numpy.pi)),
+                           energies, label='chi optimisé')
+    matplotlib.pyplot.plot(wavenumbers*(340/(2*numpy.pi)),
+                           energies_fullabs, label='chi totalement absorbant')
+    matplotlib.pyplot.xlabel('Fréquence')
+    matplotlib.pyplot.ylabel('Energie')
+    # limit to 3 digits in title
+    matplotlib.pyplot.title(' Max = ' +
+                            str(numpy.round(numpy.max(energies), 3))+', Moy = '+str(numpy.round(numpy.average(energies), 3)))
+    print('Energie max pour chi totalement absorbant = ' + str(numpy.round(numpy.max(energies_fullabs), 3)) + ', Moy = ' + str(
+        numpy.round(numpy.average(energies_fullabs), 3)))
+    matplotlib.pyplot.legend()
+    matplotlib.pyplot.show()
+    return
+
+# plot l'energie en fonction de la frequence pour un chi donné en entrée et pour un chi initial non optimisé
+
+
+def energy_freq_vs_non_optimised(domain_omega, spacestep, omega, f, f_dir, f_neu, f_rob,
+                                 beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob,
+                                 Alpha, mu, chi, V_obj, beta):
+    wavenumbers = numpy.array([k for k in range(1, 100)])
+    energies = numpy.zeros((len(wavenumbers), 1))
+    alpha_rob = Alpha*chi
+    for k in range(len(wavenumbers)):
+        u = processing.solve_helmholtz(domain_omega, spacestep, wavenumbers[k], f, f_dir, f_neu, f_rob,
+                                       beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
+        energies[k] = your_compute_objective_function(
+            domain_omega, u, spacestep)
+    # full absorbing chi
+    energies_non_op = numpy.zeros((len(wavenumbers), 1))
+    chi = preprocessing._set_chi(M, N, x, y)
+    chi = preprocessing.set2zero(chi, domain_omega)
+    alpha_rob = Alpha*chi
+    for k in range(len(wavenumbers)):
+        u = processing.solve_helmholtz(domain_omega, spacestep, wavenumbers[k], f, f_dir, f_neu, f_rob,
+                                       beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
+        energies_non_op[k] = your_compute_objective_function(
+            domain_omega, u, spacestep)
+    matplotlib.pyplot.plot(wavenumbers*(340/(2*numpy.pi)),
+                           energies_non_op, label='chi non optimisé')
+    matplotlib.pyplot.plot(wavenumbers*(340/(2*numpy.pi)),
+                           energies, label='chi optimisé')
+
+    matplotlib.pyplot.xlabel('Fréquence')
+    matplotlib.pyplot.ylabel('Energie')
+    # limit to 3 digits in title
+    matplotlib.pyplot.title(' Max = ' +
+                            str(numpy.round(numpy.max(energies), 3))+', Moy = '+str(numpy.round(numpy.average(energies), 3)))
+    print('Energie max pour chi non op  = ' + str(numpy.round(numpy.max(energies_non_op), 3)) + ', Moy = ' + str(
+        numpy.round(numpy.average(energies_non_op, 3))))
+    matplotlib.pyplot.legend()
+    matplotlib.pyplot.show()
+    return
+
+
+# plot l'energie en fonction de la frequence pour 2 chi différents donnés en entrée
+
+def plot2chi(chi1, chi2, domain_omega, spacestep, omega, f, f_dir, f_neu, f_rob,
+             beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob,
+             Alpha, mu, chi, V_obj, beta):
+    wavenumbers = numpy.array([k for k in range(1, 100)])
+    energies1 = numpy.zeros((len(wavenumbers), 1))
+    energies2 = numpy.zeros((len(wavenumbers), 1))
+    alpha_rob = Alpha*chi1
+    for k in range(len(wavenumbers)):
+        u = processing.solve_helmholtz(domain_omega, spacestep, wavenumbers[k], f, f_dir, f_neu, f_rob,
+                                       beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
+        ene = your_compute_objective_function(domain_omega, u, spacestep)
+        energies1[k] = ene
+    chi2, _, _ = random_generated(domain_omega, spacestep, wavenumbers[0], f, f_dir, f_neu, f_rob,
+                                  beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob,
+                                  Alpha, mu, chi, V_obj, beta)
+    alpha_rob = Alpha*chi2
+    for k in range(len(wavenumbers)):
+        u = processing.solve_helmholtz(domain_omega, spacestep, wavenumbers[k], f, f_dir, f_neu, f_rob,
+                                       beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
+        ene = your_compute_objective_function(domain_omega, u, spacestep)
+        energies2[k] = ene
+    postprocessing._plot_controled_solution(u, chi)
+    matplotlib.pyplot.plot(wavenumbers*(340/(2*numpy.pi)),
+                           energies1, label='descente de gradient')
+    matplotlib.pyplot.plot(wavenumbers*(340/(2*numpy.pi)),
+                           energies2, label='aléatoire')
+    matplotlib.pyplot.xlabel('Fréquence')
+    matplotlib.pyplot.ylabel('Energie')
+    # limit to 3 digits in title
+    matplotlib.pyplot.title(' Max = ' +
+                            str(numpy.round(numpy.max(energies2), 3))+', Moy = '+str(numpy.round(numpy.average(energies2), 3)))
+    matplotlib.pyplot.legend()
+    matplotlib.pyplot.show()
 
 
 if __name__ == '__main__':
@@ -324,15 +586,13 @@ if __name__ == '__main__':
     N = 100  # number of points along x-axis
     M = 2 * N  # number of points along y-axis
     level = 2
-  # level of the fractal
-
     spacestep = 1.0 / N  # mesh size
 
     # -- set parameters of the partial differential equation
     kx = -1.0
     ky = -1.0
     wavenumber = numpy.sqrt(kx**2 + ky**2)  # wavenumber
-    wavenumber = 0.01
+    wavenumber = 10.
 
     # ----------------------------------------------------------------------
     # -- Do not modify this cell, these are the values that you will be assessed against.
@@ -364,6 +624,7 @@ if __name__ == '__main__':
 
     # -- define material density matrix
     chi = preprocessing._set_chi(M, N, x, y)
+    # chi = numpy.ones(chi.shape)
     chi = preprocessing.set2zero(chi, domain_omega)
     nb_pixels = int(numpy.sum(numpy.sum(chi)))
     # -- define absorbing material
@@ -381,7 +642,7 @@ if __name__ == '__main__':
                 S += 1
     V_0 = 1  # initial volume of the domain
     V_obj = numpy.sum(numpy.sum(chi)) / S  # constraint on the density
-    print('V_obj=' + str(V_obj))
+    # print('V_obj=' + str(V_obj))
 
     mu = 5  # initial gradient step
     mu1 = 10**(-5)  # parameter of the volume functional
@@ -392,33 +653,39 @@ if __name__ == '__main__':
     # -- compute finite difference solution
     u = processing.solve_helmholtz(domain_omega, spacestep, wavenumber, f, f_dir, f_neu, f_rob,
                                    beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
-    print(your_compute_objective_function(domain_omega, u, spacestep))
     chi0 = chi.copy()
     u0 = u.copy()
 
     # ----------------------------------------------------------------------
     # -- Fell free to modify the function call in this cell.
     # ----------------------------------------------------------------------
-    # -- compute optimization
-    # energy = numpy.zeros((100+1, 1), dtype=numpy.float64)
-    # chi, energy, u, grad = your_optimization_procedure(domain_omega, spacestep, wavenumber, f, f_dir, f_neu, f_rob,
-    #                                                    beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob,
-    #                                                    Alpha, mu, chi, V_obj, nb_pixels)
+    # -- compute optimization to find chi
 
-    # chi, energy = simulated_annealing(domain_omega, spacestep, wavenumber, f, f_dir, f_neu, f_rob,
+    # chi, energy, u = your_optimization_procedure(domain_omega, spacestep, wavenumber, f, f_dir, f_neu, f_rob,
+    #                                              beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob,
+    #                                              Alpha, mu, chi, V_obj, nb_pixels)
+
+    # chi, energy, u = simulated_annealing(domain_omega, spacestep, wavenumber, f, f_dir, f_neu, f_rob,
+    #                                      beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob,
+    #                                      Alpha, mu, chi, V_obj, nb_pixels)
+
+    # chi, energy, u = random_generated(domain_omega, spacestep, wavenumber, f, f_dir, f_neu, f_rob,
     #                                   beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob,
     #                                   Alpha, mu, chi, V_obj, nb_pixels)
+    chi, energy, u = opti_multi_freq_gradient(domain_omega, spacestep, wavenumber, f, f_dir, f_neu, f_rob,
+                                              beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob,
+                                              Alpha, mu, chi, V_obj, nb_pixels)
+    # --- end of optimization
+    #
+    # -- plot energy with the found during the optimization procedure
+    energy_freq_vs_fullabs(domain_omega, spacestep, wavenumber, f, f_dir, f_neu, f_rob,
+                           beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob,
+                           Alpha, mu, chi, V_obj, nb_pixels)
 
-    chi = numpy.random.uniform(0, 1, size=(M, N))
-    chi = compute_projected(chi, domain_omega, V_obj)
-    chi = final_projected(chi, nb_pixels)
-    alpha_rob = Alpha*chi
-    u = processing.solve_helmholtz(domain_omega, spacestep, wavenumber, f, f_dir, f_neu, f_rob,
-                                   beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob)
-    print(your_compute_objective_function(domain_omega, u, spacestep))
-    print(chi)
-    # --- en of optimization
-    # print(chi)
+    # energy_freq_vs_non_optimised(domain_omega, spacestep, wavenumber, f, f_dir, f_neu, f_rob,
+    #                        beta_pde, alpha_pde, alpha_dir, beta_neu, beta_rob, alpha_rob,
+    #                        Alpha, mu, chi, V_obj, nb_pixels)
+    # -- end of plotting energy
     chin = chi.copy()
     un = u.copy()
 
@@ -427,6 +694,7 @@ if __name__ == '__main__':
     postprocessing._plot_controled_solution(un, chin)
     err = un - u0
     postprocessing._plot_error(err)
-    # postprocessing._plot_energy_history(energy)
-    # print(energy[0], energy[-1])
+    postprocessing._plot_energy_history(energy)
+    print("Energie initial : " +
+          str(energy[0, 0]) + ", Energie optimisée : " + str(energy[-1, 0]))
     print('End.')
